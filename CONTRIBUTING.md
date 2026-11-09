@@ -67,6 +67,7 @@ Behaviour that needs a running compositor is covered by integration scripts that
 ```sh
 tests/screencast_transform.sh ../umbriel/build-debug build-debug
 tests/screencast_pipewire_restart.sh ../umbriel/build-debug build-debug
+tests/picker_parent.sh ../umbriel/build-debug build-debug
 ```
 
 Each starts an isolated headless Umbriel, a private D-Bus session and PipeWire daemon, and the portal, with a scripted chooser in place of the share picker. The InputCapture checks live in the Umbriel repository; see [InputCapture verification](README.md#inputcapture-verification).
@@ -78,5 +79,7 @@ Each starts an isolated headless Umbriel, a private D-Bus session and PipeWire d
 ```json
 { "selections": [{ "kind": "monitor", "output": "DP-1" }], "dynamic": false }
 ```
+
+The request also carries `parent_window` when the application supplied one: the portal's window identifier, such as `wayland:<handle>`. The built-in picker parents itself to a Wayland handle; other forms are ignored.
 
 A window selection is `{"kind": "window", "identifier": "<ext-foreign-toplevel identifier>"}`. `dynamic` is optional and only honoured for a single selection; see [Changeable screencast targets](README.md#changeable-screencast-targets). A non-zero exit cancels the request.

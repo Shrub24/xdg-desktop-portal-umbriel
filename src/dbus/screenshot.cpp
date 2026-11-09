@@ -303,8 +303,7 @@ namespace xdpu {
                                      const std::string& parentWindow, const PortalResults& options
                                  ) {
                     (void)appId;
-                    (void)parentWindow;
-                    screenshot(std::move(result), std::string(handle), options);
+                    screenshot(std::move(result), std::string(handle), parentWindow, options);
                   })
                   .withInputParamNames("handle", "app_id", "parent_window", "options")
                   .withOutputParamNames("response", "results"),
@@ -578,14 +577,14 @@ namespace xdpu {
     struct ScreenshotOperation : public Operation {
       using Operation::Operation;
 
-      void start(const std::string& handle, bool interactive) {
+      void start(const std::string& handle, const std::string& parentWindow, bool interactive) {
         attachRequest(handle);
         if (!portal.config.screenshot.cmd.empty()) {
           runExternal(interactive);
           return;
         }
         if (interactive) {
-          runChooser();
+          runChooser(parentWindow);
           return;
         }
         auto self = std::static_pointer_cast<ScreenshotOperation>(shared_from_this());
@@ -611,7 +610,7 @@ namespace xdpu {
         });
       }
 
-      void runChooser() {
+      void runChooser(const std::string& parentWindow) {
         if (portal.config.screencast.chooserCmd.empty()) {
           std::println(stderr, "screenshot: no chooser command configured; cancelling interactive screenshot");
           finish(1, {});
@@ -619,7 +618,7 @@ namespace xdpu {
         }
 
         auto self = std::static_pointer_cast<ScreenshotOperation>(shared_from_this());
-        std::string input = portal.wayland.buildChooserJson(1, false);
+        std::string input = portal.wayland.buildChooserJson(1, false, parentWindow);
         input.push_back('\n');
         process = AsyncProcess::start(
             portal.loop, portal.config.screencast.chooserCmd, std::move(input), [self](const ProcessResult& child) {
@@ -790,11 +789,14 @@ namespace xdpu {
     // In-flight operations kept alive by this set; deregistered in finish().
     std::set<std::shared_ptr<Operation>> inflight;
 
-    void screenshot(PortalResponse&& result, const std::string& handle, const PortalResults& options) {
+    void screenshot(
+        PortalResponse&& result, const std::string& handle, const std::string& parentWindow,
+        const PortalResults& options
+    ) {
       const bool interactive = optionValue<bool>(options, "interactive").value_or(false);
       auto op = std::make_shared<ScreenshotOperation>(*this, std::move(result));
       inflight.insert(op);
-      op->start(handle, interactive);
+      op->start(handle, parentWindow, interactive);
     }
 
     void pickColor(PortalResponse&& result, const std::string& handle) {

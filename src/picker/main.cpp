@@ -6,6 +6,9 @@
 #include <fcntl.h>
 #include <glib-unix.h>
 #include <gtk/gtk.h>
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/wayland/gdkwayland.h>
+#endif
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -68,6 +71,7 @@ namespace {
     bool showWindows = false;
     bool responding = false;
     bool updatingSelection = false;
+    std::string parentWindow;
     std::vector<OutputItem> outputs;
     std::vector<WindowItem> windows;
     GtkApplication* app = nullptr;
@@ -371,6 +375,8 @@ namespace {
 
       const auto multiple = request.find("multiple");
       state.multiple = multiple != request.end() && multiple->is_boolean() && multiple->get<bool>();
+
+      state.parentWindow = jsonString(request, "parent_window");
 
       const auto types = request.find("types");
       if (types != request.end() && types->is_array()) {
@@ -894,6 +900,24 @@ namespace {
     return content;
   }
 
+  // Portal parent_window is "wayland:<xdg-foreign handle>"; any other form leaves the picker unparented.
+  void parentToRequester(GtkWidget* window, const std::string& parentWindow) {
+#ifdef GDK_WINDOWING_WAYLAND
+    constexpr std::string_view kPrefix = "wayland:";
+    if (!parentWindow.starts_with(kPrefix)) {
+      return;
+    }
+    gtk_widget_realize(window);
+    GdkSurface* surface = gtk_native_get_surface(GTK_NATIVE(window));
+    if (GDK_IS_WAYLAND_TOPLEVEL(surface)) {
+      gdk_wayland_toplevel_set_transient_for_exported(GDK_TOPLEVEL(surface), parentWindow.c_str() + kPrefix.size());
+    }
+#else
+    (void)window;
+    (void)parentWindow;
+#endif
+  }
+
   void onActivate(GtkApplication* app, gpointer userData) {
     auto* state = static_cast<AppState*>(userData);
     state->app = app;
@@ -955,6 +979,7 @@ namespace {
           }
       );
     }
+    parentToRequester(window, state->parentWindow);
     gtk_window_present(GTK_WINDOW(window));
     if (!state->previewCards.empty()) {
       std::vector<xdpu::PreviewSource> sources;

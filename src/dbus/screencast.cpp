@@ -398,9 +398,8 @@ namespace xdpu {
                                      const std::string& parentWindow, const PortalResults& options
                                  ) {
                     (void)appId;
-                    (void)parentWindow;
                     (void)options;
-                    start(std::move(result), std::string(handle), std::string(sessionHandle));
+                    start(std::move(result), std::string(handle), std::string(sessionHandle), parentWindow);
                   })
                   .withInputParamNames("handle", "session_handle", "app_id", "parent_window", "options")
                   .withOutputParamNames("response", "results"),
@@ -495,7 +494,7 @@ namespace xdpu {
       StartOperation(Impl& portal, PortalResponse&& result, std::shared_ptr<Session> session)
           : portal(portal), result(std::move(result)), session(std::move(session)) {}
 
-      void start(const std::string& handle) {
+      void start(const std::string& handle, const std::string& parentWindow) {
         attachRequest(handle);
         const auto restored = resolveRestoreSelections(
             portal.wayland, session->restoreSelections(), session->multiple(), session->sourceTypes()
@@ -508,7 +507,7 @@ namespace xdpu {
           startDynamic(std::nullopt, *mode);
           return;
         }
-        runChooser();
+        runChooser(parentWindow);
       }
 
       // Only the short handoff after a changeable share joins it without a chooser. A concurrent share from the
@@ -581,7 +580,7 @@ namespace xdpu {
         finish(1, {});
       }
 
-      void runChooser() {
+      void runChooser(const std::string& parentWindow) {
         if (portal.config.screencast.chooserCmd.empty()) {
           std::println(stderr, "screencast: no chooser command configured; cancelling");
           finish(1, {});
@@ -589,7 +588,7 @@ namespace xdpu {
         }
 
         auto self = shared_from_this();
-        std::string input = portal.wayland.buildChooserJson(session->sourceTypes(), session->multiple());
+        std::string input = portal.wayland.buildChooserJson(session->sourceTypes(), session->multiple(), parentWindow);
         input.push_back('\n');
         process = AsyncProcess::start(
             portal.loop, portal.config.screencast.chooserCmd, std::move(input), [self](const ProcessResult& child) {
@@ -1011,7 +1010,10 @@ namespace xdpu {
       }
     }
 
-    void start(PortalResponse&& result, const std::string& handle, const std::string& sessionPath) {
+    void start(
+        PortalResponse&& result, const std::string& handle, const std::string& sessionPath,
+        const std::string& parentWindow
+    ) {
       const auto sessionIt = sessions.find(sessionPath);
       if (sessionIt == sessions.end() || sessionIt->second->closed()) {
         auto request = std::make_shared<Request>(connection, handle, [] {});
@@ -1022,7 +1024,7 @@ namespace xdpu {
 
       auto op = std::make_shared<StartOperation>(*this, std::move(result), sessionIt->second);
       inflight.insert(op);
-      op->start(handle);
+      op->start(handle, parentWindow);
     }
   };
 

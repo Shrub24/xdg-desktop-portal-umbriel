@@ -128,7 +128,7 @@ namespace xdpu {
     // Compositor-reported focused output, marked `"focused": true` in the chooser request.
     void setFocusedOutput(std::optional<std::string> name);
 
-    std::string buildChooserJson(uint32_t sourceTypes, bool multiple) const;
+    std::string buildChooserJson(uint32_t sourceTypes, bool multiple, const std::string& parentWindow) const;
 
     struct Impl;
     struct CursorCapture;
